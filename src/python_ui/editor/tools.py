@@ -13,7 +13,7 @@ from .brushengine import BrushEngine, CircleTip, SquareTip, TextureTip
 from PyQt5.QtGui import QPainter, QPen, QBrush, QColor, QFont, QFontDatabase, QPainterPath, QCursor
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QTextEdit, QComboBox,
-    QSpinBox, QPushButton, QLabel, QCheckBox, QMessageBox,
+    QSpinBox, QPushButton, QLabel, QCheckBox, QMessageBox, QColorDialog,
 )
 
 SHORTCUT_MAP = {}
@@ -363,7 +363,7 @@ class TextTool(Tool):
     cursor_shape = Qt.IBeamCursor
 
     def press(self, canvas, pos, mods):
-        dialog = QDialog()
+        dialog = QDialog(canvas)
         dialog.setWindowTitle("Text Tool")
         layout = QVBoxLayout(dialog)
 
@@ -392,6 +392,13 @@ class TextTool(Tool):
         font_layout.addWidget(underline_cb)
         layout.addLayout(font_layout)
 
+        color_btn = QPushButton("Color")
+        tc = canvas.tool_color
+        if tc.lightness() < 128:
+            tc = QColor(255, 255, 255)
+        color_btn.setStyleSheet(f"background-color: {tc.name()}; min-height: 24px;")
+        font_layout.addWidget(color_btn)
+
         btn_layout = QHBoxLayout()
         ok_btn = QPushButton("OK")
         cancel_btn = QPushButton("Cancel")
@@ -401,11 +408,19 @@ class TextTool(Tool):
 
         confirmed = False
 
+        def on_color():
+            nonlocal tc
+            c = QColorDialog.getColor(tc, dialog, "Text Color")
+            if c.isValid():
+                tc = c
+                color_btn.setStyleSheet(f"background-color: {tc.name()}; min-height: 24px;")
+
         def on_ok():
             nonlocal confirmed
             confirmed = True
             dialog.accept()
 
+        color_btn.clicked.connect(on_color)
         ok_btn.clicked.connect(on_ok)
         cancel_btn.clicked.connect(dialog.reject)
 
@@ -420,11 +435,12 @@ class TextTool(Tool):
             font.setBold(bold_cb.isChecked())
             font.setItalic(italic_cb.isChecked())
             font.setUnderline(underline_cb.isChecked())
+            fm = QFontMetrics(font)
             p = QPainter(layer.image)
             p.setRenderHint(QPainter.Antialiasing)
             p.setFont(font)
-            p.setPen(canvas.tool_color)
-            p.drawText(pos, text)
+            p.setPen(tc)
+            p.drawText(int(pos.x()), int(pos.y()) + fm.ascent(), text)
             p.end()
             canvas._refresh()
 

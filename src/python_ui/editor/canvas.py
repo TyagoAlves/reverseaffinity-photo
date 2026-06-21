@@ -5,7 +5,7 @@ from PyQt5.QtGui import (
     QTransform, QPolygonF, QFont, QFontMetrics, QBitmap, QRegion,
     QPainterPath, QCursor,
 )
-from PyQt5.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsPixmapItem
+from PyQt5.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsPixmapItem, QOpenGLWidget
 import math
 from collections import deque
 import numpy as np
@@ -98,6 +98,11 @@ class CanvasView(QGraphicsView):
         self.setDragMode(QGraphicsView.NoDrag)
         self.setViewportUpdateMode(QGraphicsView.FullViewportUpdate)
         self.setAcceptDrops(True)
+
+        try:
+            self.setViewport(QOpenGLWidget())
+        except Exception:
+            pass
 
         self.tool_changed.emit(self.tool.name)
         self._refresh()
