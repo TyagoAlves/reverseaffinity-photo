@@ -427,10 +427,10 @@ class TextTool(Tool):
         dialog.exec_()
 
         if confirmed:
-            layer = canvas.layer_stack.active
+            text = text_edit.toPlainText()
+            layer = canvas.layer_stack.add_layer("Text")
             if not layer or layer.locked:
                 return
-            text = text_edit.toPlainText()
             font = QFont(font_combo.currentText(), size_spin.value())
             font.setBold(bold_cb.isChecked())
             font.setItalic(italic_cb.isChecked())
