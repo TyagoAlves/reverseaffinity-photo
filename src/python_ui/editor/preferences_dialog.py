@@ -225,9 +225,13 @@ class PreferencesDialog(QDialog):
 
     def _on_apply(self):
         self._apply()
+        lang = self._settings.get('language', 'pt_BR')
+        if lang and lang != 'system':
+            from .i18n import get_translator
+            get_translator().set_language(lang)
 
     def _on_ok(self):
-        self._apply()
+        self._on_apply()
         self.accept()
 
     def _on_cancel(self):

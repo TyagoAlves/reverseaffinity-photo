@@ -2,13 +2,13 @@ from PyQt5.QtCore import Qt, QPoint, QPointF, QRect, QRectF
 from PyQt5.QtGui import QPixmap, QPainter, QColor, QPen, QBrush, QPainterPath, QPolygonF, QFont, QIcon, QLinearGradient, QRadialGradient
 import math
 
-C = QColor(230, 230, 230)
-CP = QPen(C, 1.6)
-CP_THIN = QPen(C, 1.0)
+C = QColor(235, 235, 235)
+CP = QPen(C, 2.0)
+CP_THIN = QPen(C, 1.2)
 NOBRUSH = Qt.NoBrush
 
 
-def _make(size=26):
+def _make(size=28):
     pix = QPixmap(size, size)
     pix.fill(Qt.transparent)
     p = QPainter(pix)

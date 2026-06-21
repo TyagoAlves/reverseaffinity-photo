@@ -109,12 +109,6 @@ class CanvasView(QGraphicsView):
                 self.setViewport(QOpenGLWidget())
             except Exception:
                 pass
-        else:
-            try:
-                from PyQt5.QtWidgets import QWidget
-                self.setViewport(QWidget())
-            except Exception:
-                pass
 
     def _refresh(self):
         composite = self.layer_stack.composite()

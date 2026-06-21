@@ -31,9 +31,9 @@ class ToolPalette(QWidget):
     def __init__(self, canvas_getter, parent=None):
         super().__init__(parent)
         self.get_canvas = canvas_getter
-        self.setFixedWidth(46)
+        self.setFixedWidth(50)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(3, 3, 3, 3)
+        layout.setContentsMargins(4, 4, 4, 4)
         layout.setSpacing(1)
 
         self.button_group = QButtonGroup()
@@ -49,10 +49,10 @@ class ToolPalette(QWidget):
                 icon = get_tool_icon(tool_cls.name)
                 if not icon.isNull():
                     btn.setIcon(icon)
-                    btn.setIconSize(QSize(24, 24))
+                    btn.setIconSize(QSize(26, 26))
                 else:
                     btn.setText(tool_cls.shortcut)
-                btn.setFixedSize(38, 28)
+                btn.setFixedSize(40, 30)
                 btn.setStyleSheet("""
                     QToolButton {
                         border: 1px solid #2a2a2a; border-radius: 3px;
