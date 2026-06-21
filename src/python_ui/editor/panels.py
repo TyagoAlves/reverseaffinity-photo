@@ -563,11 +563,13 @@ class LayerPanel(QWidget):
         # Layer list
         self.list_widget = QListWidget()
         self.list_widget.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.list_widget.setDragDropMode(QAbstractItemView.InternalMove)
         self.list_widget.currentRowChanged.connect(self._row_changed)
         self.list_widget.setIconSize(QSize(32, 32))
         self.list_widget.setSpacing(1)
         self.list_widget.setContextMenuPolicy(Qt.CustomContextMenu)
         self.list_widget.customContextMenuRequested.connect(self._show_context_menu)
+        self.list_widget.model().rowsMoved.connect(self._on_rows_moved)
         layout.addWidget(self.list_widget, 1)
 
         # Action buttons row (Photoshop-style)
@@ -594,6 +596,14 @@ class LayerPanel(QWidget):
         action_row.addWidget(self.group_btn)
 
         action_row.addStretch()
+
+        self.up_btn = self._action_button("↑", _("Move up"))
+        self.up_btn.clicked.connect(self._move_layer_up)
+        action_row.addWidget(self.up_btn)
+
+        self.down_btn = self._action_button("↓", _("Move down"))
+        self.down_btn.clicked.connect(self._move_layer_down)
+        action_row.addWidget(self.down_btn)
 
         self.add_btn = self._action_button("＋", _("New layer"))
         self.add_btn.clicked.connect(self._add_layer)
@@ -771,6 +781,7 @@ class LayerPanel(QWidget):
         canvas = self.get_canvas()
         if canvas and canvas.layer_stack.active:
             canvas.layer_stack.active.blend_mode = mode
+            canvas.layer_stack.invalidate_cache()
             canvas._refresh()
 
     def _opacity_changed(self, val):
@@ -778,6 +789,7 @@ class LayerPanel(QWidget):
         if canvas and canvas.layer_stack.active:
             canvas.layer_stack.active.opacity = val / 100.0
             self.opacity_value.setText(f"{val}%")
+            canvas.layer_stack.invalidate_cache()
             canvas._refresh()
 
     def _fill_changed(self, val):
@@ -785,6 +797,7 @@ class LayerPanel(QWidget):
         if canvas and canvas.layer_stack.active:
             canvas.layer_stack.active.fill = val / 100.0
             self.fill_value.setText(f"{val}%")
+            canvas.layer_stack.invalidate_cache()
             canvas._refresh()
 
     def _add_layer(self):
@@ -832,6 +845,36 @@ class LayerPanel(QWidget):
             canvas._refresh()
             self.refresh()
 
+    def _on_rows_moved(self, parent, start, end, dest, row):
+        canvas = self.get_canvas()
+        if canvas:
+            canvas.layer_stack.invalidate_cache()
+            canvas._refresh()
+
+    def _move_layer_up(self):
+        canvas = self.get_canvas()
+        if not canvas:
+            return
+        idx = self.list_widget.currentRow()
+        if idx > 0:
+            canvas._save_state("Move layer")
+            canvas.layer_stack.move_layer(idx, idx - 1)
+            canvas._refresh()
+            self.refresh()
+            self.list_widget.setCurrentRow(idx - 1)
+
+    def _move_layer_down(self):
+        canvas = self.get_canvas()
+        if not canvas:
+            return
+        idx = self.list_widget.currentRow()
+        if 0 <= idx < len(canvas.layer_stack.layers) - 1:
+            canvas._save_state("Move layer")
+            canvas.layer_stack.move_layer(idx, idx + 1)
+            canvas._refresh()
+            self.refresh()
+            self.list_widget.setCurrentRow(idx + 1)
+
     def _show_context_menu(self, pos):
         item = self.list_widget.itemAt(pos)
         if not item:
@@ -844,6 +887,9 @@ class LayerPanel(QWidget):
         menu = QMenu(self)
 
         rename_action = menu.addAction(_("Rename Layer..."))
+        menu.addSeparator()
+        move_up_action = menu.addAction(_("Move Up"))
+        move_down_action = menu.addAction(_("Move Down"))
         menu.addSeparator()
         dup_action = menu.addAction(_("Duplicate Layer"))
         del_action = menu.addAction(_("Delete Layer"))
@@ -859,6 +905,18 @@ class LayerPanel(QWidget):
             new_name, ok = QInputDialog.getText(self, _("Rename Layer"), _("Name:"), text=current_name)
             if ok and new_name:
                 canvas.layer_stack.layers[idx].name = new_name
+                self.refresh()
+        elif action == move_up_action:
+            if idx > 0:
+                canvas._save_state("Move layer")
+                canvas.layer_stack.move_layer(idx, idx - 1)
+                canvas._refresh()
+                self.refresh()
+        elif action == move_down_action:
+            if idx < len(canvas.layer_stack.layers) - 1:
+                canvas._save_state("Move layer")
+                canvas.layer_stack.move_layer(idx, idx + 1)
+                canvas._refresh()
                 self.refresh()
         elif action == dup_action:
             canvas._save_state("Duplicate layer")
