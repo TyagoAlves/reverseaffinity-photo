@@ -102,6 +102,20 @@ class CanvasView(QGraphicsView):
         self.tool_changed.emit(self.tool.name)
         self._refresh()
 
+    def apply_opengl_setting(self, use_opengl):
+        if use_opengl:
+            try:
+                from PyQt5.QtWidgets import QOpenGLWidget
+                self.setViewport(QOpenGLWidget())
+            except Exception:
+                pass
+        else:
+            try:
+                from PyQt5.QtWidgets import QWidget
+                self.setViewport(QWidget())
+            except Exception:
+                pass
+
     def _refresh(self):
         composite = self.layer_stack.composite()
         self.pixmap_item.setPixmap(QPixmap.fromImage(composite))

@@ -600,6 +600,8 @@ class MainWindow(QMainWindow):
 
         self.settings = SettingsManager()
         self.settings.load()
+        self.canvas.apply_opengl_setting(self.settings.get('use_opengl', False))
+        self.settings.setting_changed.connect(self._on_setting_changed)
         get_translator().language_changed.connect(lambda l: self.retranslate_ui())
         lang = self.settings.get('language', 'pt_BR')
         if lang and lang != 'system':
@@ -809,6 +811,10 @@ class MainWindow(QMainWindow):
             self.canvas.set_foreground_color(color)
             self._sync_color_btn(color)
             self.color_panel.set_color(color)
+
+    def _on_setting_changed(self, key, value):
+        if key == 'use_opengl':
+            self.canvas.apply_opengl_setting(value)
 
     def _show_about(self):
         icon_path = os.path.join(os.path.dirname(__file__), "..", "assets", "icon.svg")
