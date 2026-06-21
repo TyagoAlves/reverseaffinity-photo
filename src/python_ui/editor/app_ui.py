@@ -874,6 +874,7 @@ class MainWindow(QMainWindow):
             pass
 
     def create_menus(self):
+        self.menuBar().setNativeMenuBar(False)
         mb = self.menuBar()
 
         file_m = mb.addMenu(_("&File"))
