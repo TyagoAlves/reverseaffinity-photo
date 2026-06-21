@@ -585,17 +585,9 @@ class ExportDialog(QDialog):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        screen = QApplication.primaryScreen().availableGeometry()
-        max_w = screen.width() - 120
-        max_h = screen.height() - 120
-        w = min(int(screen.width() * 0.72), 1440, max_w)
-        h = min(int(screen.height() * 0.75), 900, max_h)
-        self.resize(w, h)
-        self.setMaximumSize(max_w, max_h)
-        self.move(
-            screen.x() + (screen.width() - w) // 2,
-            screen.y() + (screen.height() - h) // 2
-        )
+        self._target_w = 1280
+        self._target_h = 760
+        self.resize(self._target_w, self._target_h)
 
         self.canvas = CanvasView(self)
 
@@ -747,6 +739,7 @@ class MainWindow(QMainWindow):
 
         self.right_dock = QDockWidget(_("Panels"), self)
         self.right_dock.setWidget(self.right_tabs)
+        self.right_dock.setMaximumWidth(280)
         self.addDockWidget(Qt.RightDockWidgetArea, self.right_dock)
 
         # Initialize recent files before creating menus
@@ -776,7 +769,21 @@ class MainWindow(QMainWindow):
         self._plugin_manager = self._init_plugins()
         self._update_dim_label()
         self.retranslate_ui()
-        QTimer.singleShot(200, lambda: show_welcome_if_needed(self))
+        QTimer.singleShot(50, self._fit_window_to_screen)
+        QTimer.singleShot(300, lambda: show_welcome_if_needed(self))
+
+    def _fit_window_to_screen(self):
+        screen = QApplication.primaryScreen().availableGeometry()
+        margin = 80
+        max_w = screen.width() - margin * 2
+        max_h = screen.height() - margin * 2
+        cur_w = self.width()
+        cur_h = self.height()
+        new_w = min(cur_w, max_w)
+        new_h = min(cur_h, max_h)
+        new_x = screen.x() + (screen.width() - new_w) // 2
+        new_y = screen.y() + (screen.height() - new_h) // 2
+        self.setGeometry(new_x, new_y, new_w, new_h)
 
     def _make_toolbar_wrapper(self, widget):
         tb = QToolBar(_("Tools"))
