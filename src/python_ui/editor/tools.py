@@ -442,6 +442,7 @@ class TextTool(Tool):
             p.setPen(tc)
             p.drawText(int(pos.x()), int(pos.y()) + fm.ascent(), text)
             p.end()
+            canvas.layer_stack.invalidate_cache()
             canvas._refresh()
 
 
