@@ -507,7 +507,7 @@ class CanvasView(QGraphicsView):
         self._apply_pixel_op(pos, self._sponge_func, amount)
 
     def dodge_line(self, p1, p2, exposure=0.5):
-        steps = max(int(p1.distance(p2) / 2), 1)
+        steps = max(int(math.hypot(p2.x() - p1.x(), p2.y() - p1.y()) / 2), 1)
         for t in range(steps + 1):
             frac = t / steps
             pt = QPointF(p1.x() + (p2.x() - p1.x()) * frac,
@@ -515,7 +515,7 @@ class CanvasView(QGraphicsView):
             self.dodge_point(pt, exposure)
 
     def burn_line(self, p1, p2, exposure=0.5):
-        steps = max(int(p1.distance(p2) / 2), 1)
+        steps = max(int(math.hypot(p2.x() - p1.x(), p2.y() - p1.y()) / 2), 1)
         for t in range(steps + 1):
             frac = t / steps
             pt = QPointF(p1.x() + (p2.x() - p1.x()) * frac,
@@ -523,7 +523,7 @@ class CanvasView(QGraphicsView):
             self.burn_point(pt, exposure)
 
     def saturate_line(self, p1, p2, amount=0.5):
-        steps = max(int(p1.distance(p2) / 2), 1)
+        steps = max(int(math.hypot(p2.x() - p1.x(), p2.y() - p1.y()) / 2), 1)
         for t in range(steps + 1):
             frac = t / steps
             pt = QPointF(p1.x() + (p2.x() - p1.x()) * frac,
