@@ -261,10 +261,13 @@ class SwatchesPanel(QWidget):
 
     def _show_swatch_menu(self, btn, pos, hex_color):
         menu = QMenu(self)
-        menu.addAction(_("Set as Foreground"), lambda: self._select_color(hex_color, False))
-        menu.addAction(_("Set as Background"), lambda: self._select_color(hex_color, True))
+        fg = menu.addAction(_("Set as Foreground"))
+        fg.triggered.connect(lambda: self._select_color(hex_color, False))
+        bg = menu.addAction(_("Set as Background"))
+        bg.triggered.connect(lambda: self._select_color(hex_color, True))
         menu.addSeparator()
-        menu.addAction(_("Delete Swatch"), lambda: self._delete_swatch(hex_color))
+        delete = menu.addAction(_("Delete Swatch"))
+        delete.triggered.connect(lambda: self._delete_swatch(hex_color))
         menu.exec_(btn.mapToGlobal(pos))
 
     def _delete_swatch(self, hex_color):
@@ -442,18 +445,19 @@ class ChannelsPanel(QWidget):
         ch = self.channels[row]
         menu = QMenu(self)
         if ch["name"] not in ("RGB",):
-            vis_action = menu.addAction(
+            vis = menu.addAction(
                 _("Hide Channel") if ch["visible"] else _("Show Channel")
             )
-            del_action = menu.addAction(_("Delete Channel"))
+            menu.addSeparator()
+            del_ch = menu.addAction(_("Delete Channel"))
         else:
-            menu.addAction(_("Duplicate Channel"))
+            menu.addAction(_("RGB channel cannot be deleted"))
 
         action = menu.exec_(self.list_widget.viewport().mapToGlobal(pos))
         if ch["name"] not in ("RGB",):
-            if action == vis_action:
+            if action == vis:
                 self._toggle_visibility(ch)
-            elif action == del_action:
+            elif action == del_ch:
                 self._delete_channel(row)
 
     def _delete_channel(self, row):

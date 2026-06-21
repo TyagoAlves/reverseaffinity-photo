@@ -22,20 +22,6 @@ class FileDialog(QDialog):
 
         self.setWindowTitle(title)
         self.setMinimumSize(700, 500)
-        self.setStyleSheet("""
-            QDialog { background-color: #1a1a2e; color: #e0e0e0; }
-            QLineEdit { background: #0e0e1a; color: #e0e0e0; border: 1px solid #333; padding: 6px; border-radius: 4px; }
-            QListWidget { background: #0e0e1a; color: #e0e0e0; border: 1px solid #333; border-radius: 4px; }
-            QListWidget::item { padding: 4px 8px; }
-            QListWidget::item:selected { background: #3a8ac4; color: #fff; }
-            QPushButton { background: #2a2a3e; color: #e0e0e0; border: 1px solid #444; padding: 6px 16px; border-radius: 4px; }
-            QPushButton:hover { background: #3a4a6e; border-color: #5a8ac4; }
-            QPushButton:pressed { background: #4a5a7e; }
-            QComboBox { background: #0e0e1a; color: #e0e0e0; border: 1px solid #333; padding: 4px; border-radius: 4px; }
-            QComboBox::drop-down { border: none; }
-            QComboBox QAbstractItemView { background: #1a1a2e; color: #e0e0e0; selection-background-color: #3a8ac4; }
-            QLabel { color: #aaa; }
-        """)
 
         layout = QVBoxLayout(self)
         layout.setSpacing(8)

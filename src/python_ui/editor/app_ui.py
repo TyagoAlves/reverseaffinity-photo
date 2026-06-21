@@ -586,10 +586,12 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         screen = QApplication.primaryScreen().availableGeometry()
-        w = min(int(screen.width() * 0.82), 1560)
-        h = min(int(screen.height() * 0.85), 960)
+        max_w = screen.width() - 120
+        max_h = screen.height() - 120
+        w = min(int(screen.width() * 0.72), 1440, max_w)
+        h = min(int(screen.height() * 0.75), 900, max_h)
         self.resize(w, h)
-        self.setMaximumSize(screen.width(), screen.height())
+        self.setMaximumSize(max_w, max_h)
         self.move(
             screen.x() + (screen.width() - w) // 2,
             screen.y() + (screen.height() - h) // 2
