@@ -367,16 +367,17 @@ class CanvasView(QGraphicsView):
         if not layer or layer.locked:
             return False
         w, h = layer.image.width(), layer.image.height()
-        i_dx, i_dy = int(dx), int(dy)
+        i_dx, i_dy = int(round(dx)), int(round(dy))
         if i_dx == 0 and i_dy == 0:
             return False
-        new_img = QImage(w, h, QImage.Format_ARGB32)
+        new_img = QImage(w, h, QImage.Format_ARGB32_Premultiplied)
         new_img.fill(Qt.transparent)
         p = QPainter(new_img)
         p.setRenderHint(QPainter.SmoothPixmapTransform)
         p.drawImage(i_dx, i_dy, layer.image)
         p.end()
         layer.image = new_img
+        self.layer_stack.invalidate_cache()
         self._refresh()
         return True
 
@@ -976,6 +977,7 @@ class CanvasView(QGraphicsView):
             from .tools import PenTool
             if isinstance(self.tool, PenTool):
                 self.tool.finalize(self)
+            super().mousePressEvent(event)
             return
         if event.button() == Qt.LeftButton:
             view_pos = event.pos()
@@ -1004,6 +1006,7 @@ class CanvasView(QGraphicsView):
             if snap_info:
                 self._show_snap_indicator(snap_info[0], snap_info[1])
                 self.status_changed.emit(f"Snap to {snap_info[1]}")
+            super().mousePressEvent(event)
         elif event.button() == Qt.MiddleButton:
             self.setDragMode(QGraphicsView.ScrollHandDrag)
             super().mousePressEvent(event)
@@ -1057,9 +1060,10 @@ class CanvasView(QGraphicsView):
                 if snap_info:
                     self._show_snap_indicator(snap_info[0], snap_info[1])
                     self.status_changed.emit(f"Snap to {snap_info[1]}")
+            super().mouseReleaseEvent(event)
         elif event.button() == Qt.MiddleButton:
             self.setDragMode(QGraphicsView.NoDrag)
-            event.ignore()
+            super().mouseReleaseEvent(event)
 
     def keyPressEvent(self, event):
         key = event.key()

@@ -9,6 +9,7 @@ Hotkeys:
 """
 
 from PyQt5.QtCore import Qt, QPointF, QRectF
+from PyQt5.QtWidgets import QGraphicsView
 from .brushengine import BrushEngine, CircleTip, SquareTip, TextureTip
 from PyQt5.QtGui import QPainter, QPen, QBrush, QColor, QFont, QFontDatabase, QFontMetrics, QPainterPath, QCursor
 from PyQt5.QtWidgets import (
@@ -271,11 +272,11 @@ class HandTool(Tool):
     cursor_shape = Qt.OpenHandCursor
 
     def press(self, canvas, pos, mods):
-        canvas.setDragMode(1)
+        canvas.setDragMode(QGraphicsView.ScrollHandDrag)
         super().press(canvas, pos, mods)
 
     def release(self, canvas, pos, mods):
-        canvas.setDragMode(0)
+        canvas.setDragMode(QGraphicsView.NoDrag)
         super().release(canvas, pos, mods)
 
 
