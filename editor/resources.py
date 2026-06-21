@@ -9,39 +9,47 @@ QMainWindow, QDialog, QWidget {
 }
 
 QMenuBar {
-    background-color: #111111;
-    color: #c0c0c0;
-    border-bottom: 1px solid #222;
-    padding: 1px 0;
+    background-color: #1e1e1e;
+    color: #c8c8c8;
+    border-bottom: 1px solid #2a2a2a;
+    padding: 2px 0;
     font-size: 12px;
 }
 QMenuBar::item {
-    padding: 3px 10px;
+    padding: 4px 12px;
     background: transparent;
-    border-radius: 2px;
 }
 QMenuBar::item:selected {
-    background: #2a2a2a;
-    color: #fff;
+    background: #323232;
+    color: #f0f0f0;
+}
+QMenuBar::item:pressed {
+    background: #3a3a3a;
 }
 QMenu {
-    background-color: #1a1a1a;
-    border: 1px solid #333;
-    padding: 4px;
-    border-radius: 4px;
+    background-color: #2b2b2b;
+    border: 1px solid #404040;
+    padding: 4px 0;
 }
 QMenu::item {
-    padding: 5px 20px 5px 10px;
-    border-radius: 2px;
+    padding: 6px 36px 6px 14px;
 }
 QMenu::item:selected {
-    background: #3a8ac4;
+    background: #3a6ea5;
     color: #fff;
 }
 QMenu::separator {
     height: 1px;
-    background: #333;
-    margin: 3px 6px;
+    background: #404040;
+    margin: 4px 12px;
+}
+QMenu::right-arrow {
+    image: none;
+}
+QMenu::indicator {
+    width: 14px;
+    height: 14px;
+    margin-left: 8px;
 }
 
 QToolBar {
