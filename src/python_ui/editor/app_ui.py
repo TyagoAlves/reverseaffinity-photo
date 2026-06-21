@@ -1193,6 +1193,8 @@ class MainWindow(QMainWindow):
         self.create_menus()
 
     def _rebuild_status_bar(self):
+        if not hasattr(self, 'coord_label'):
+            return
         self.coord_label.setText(_("X: ") + "0" + _("  Y: ") + "0")
         self.info_label.setText(_("R:") + "0" + _(" G:") + "0" + _(" B:") + "0")
         self.tool_label.setText(self.canvas.tool.name)
