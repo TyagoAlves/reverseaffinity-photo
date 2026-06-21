@@ -1,5 +1,5 @@
 import os
-from PyQt5.QtCore import Qt, QSize, QSettings, QRectF
+from PyQt5.QtCore import Qt, QSize, QSettings, QRectF, QTimer
 from PyQt5.QtGui import QColor, QKeySequence, QFont, QIcon, QFontDatabase, QPixmap, QPainter, QBrush, QPen, QPainterPath
 from PyQt5.QtWidgets import (
     QMainWindow, QAction, QFileDialog, QColorDialog,
@@ -18,6 +18,7 @@ from .file_dialog import get_open_file_name, get_save_file_name
 from .settings import SettingsManager
 from .preferences_dialog import PreferencesDialog
 from .resources import apply_dark_theme
+from .tutorial import show_welcome_if_needed
 from .tool_icons import get_tool_icon
 from .i18n import _, get_translator
 from .video_mode import VideoMode
@@ -773,6 +774,7 @@ class MainWindow(QMainWindow):
         self._plugin_manager = self._init_plugins()
         self._update_dim_label()
         self.retranslate_ui()
+        QTimer.singleShot(200, lambda: show_welcome_if_needed(self))
 
     def _make_toolbar_wrapper(self, widget):
         tb = QToolBar(_("Tools"))
