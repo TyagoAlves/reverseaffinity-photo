@@ -72,7 +72,8 @@ class HistoryManager(QObject):
 
         snap = [
             (l.name, l.image.copy(), l.visible, l.locked, l.opacity, l.blend_mode,
-             l.fill, l.mask.copy() if l.mask else None, l.mask_enabled, l.mask_linked)
+             l.fill, l.mask.copy() if l.mask else None, l.mask_enabled, l.mask_linked,
+             l.x_offset, l.y_offset)
             for l in layers if hasattr(l, 'image')
         ]
         entry = HistoryEntry(description, snap, active_index, composite_img)
@@ -108,6 +109,9 @@ class HistoryManager(QObject):
                 l.mask = data[7].copy() if data[7] else None
                 l.mask_enabled = data[8]
                 l.mask_linked = data[9]
+            if len(data) > 10:
+                l.x_offset = data[10]
+                l.y_offset = data[11]
             layer_stack.layers.append(l)
         layer_stack.active_index = entry.active_index
         return True

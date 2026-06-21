@@ -41,6 +41,8 @@ class Layer:
         self.mask = None
         self.mask_enabled = True
         self.mask_linked = True
+        self.x_offset = 0
+        self.y_offset = 0
 
     def copy(self):
         l = Layer(self.image.width(), self.image.height(), self.name + " (copy)")
@@ -54,6 +56,8 @@ class Layer:
         l.mask = self.mask.copy() if self.mask is not None else None
         l.mask_enabled = self.mask_enabled
         l.mask_linked = self.mask_linked
+        l.x_offset = self.x_offset
+        l.y_offset = self.y_offset
         return l
 
     def reveal_all_mask(self):
@@ -377,11 +381,25 @@ class LayerStack:
             return self._cache
         if not self.layers:
             return QImage()
-        w, h = 800, 600
+        min_x = min_y = 0
+        max_x = max_y = 0
+        first = True
         for l in self.layers:
-            if isinstance(l, Layer):
-                w, h = l.image.width(), l.image.height()
-                break
+            if isinstance(l, GroupLayer) or not l.visible:
+                continue
+            if first:
+                min_x = l.x_offset
+                min_y = l.y_offset
+                max_x = l.x_offset + l.image.width()
+                max_y = l.y_offset + l.image.height()
+                first = False
+            else:
+                min_x = min(min_x, l.x_offset)
+                min_y = min(min_y, l.y_offset)
+                max_x = max(max_x, l.x_offset + l.image.width())
+                max_y = max(max_y, l.y_offset + l.image.height())
+        w = max(max_x - min_x, 1)
+        h = max(max_y - min_y, 1)
         result = np.zeros((h, w, 4), dtype=np.float32)
         child_ids = set()
         for l in self.layers:
@@ -392,14 +410,14 @@ class LayerStack:
                 continue
             if isinstance(layer, GroupLayer):
                 if layer.visible:
-                    self._composite_group_into(layer, result, w, h)
+                    self._composite_group_into(layer, result, w, h, min_x, min_y)
             elif layer.visible:
-                self._composite_layer_into(layer, result, w, h)
+                self._composite_layer_into(layer, result, w, h, min_x, min_y)
         self._cache = _float_array_to_qimage(result, w, h)
         self._cache_dirty = False
         return self._cache
 
-    def _composite_layer_into(self, layer, result, w, h):
+    def _composite_layer_into(self, layer, result, w, h, base_x=0, base_y=0):
         if isinstance(layer, AdjustmentLayer):
             if layer.filter_func:
                 qimg = _float_array_to_qimage(result, w, h)
@@ -412,45 +430,57 @@ class LayerStack:
                 result[:, :, :3] = blend_rgb * a + result[:, :, :3] * (1.0 - a)
                 result[:, :, 3] = adjusted[:, :, 3] * a + result[:, :, 3] * (1.0 - a)
             return
+        ox = layer.x_offset - base_x
+        oy = layer.y_offset - base_y
         img = layer.image
         iw, ih = img.width(), img.height()
-        if iw != w or ih != h:
-            img = img.scaled(w, h, Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
-        if img.format() != QImage.Format_RGBA8888:
-            img = img.convertToFormat(QImage.Format_RGBA8888)
-        ptr = img.constBits()
-        ptr.setsize(img.sizeInBytes())
-        arr = np.frombuffer(ptr, dtype=np.uint8).copy().reshape(ih, iw, 4)
+        r_x1 = max(0, ox)
+        r_y1 = max(0, oy)
+        r_x2 = min(w, ox + iw)
+        r_y2 = min(h, oy + ih)
+        if r_x2 <= r_x1 or r_y2 <= r_y1:
+            return
+        l_x1 = max(0, -ox)
+        l_y1 = max(0, -oy)
+        l_x2 = l_x1 + (r_x2 - r_x1)
+        l_y2 = l_y1 + (r_y2 - r_y1)
+        chunk = img.copy(l_x1, l_y1, l_x2 - l_x1, l_y2 - l_y1)
+        if chunk.format() != QImage.Format_RGBA8888:
+            chunk = chunk.convertToFormat(QImage.Format_RGBA8888)
+        ptr = chunk.constBits()
+        ptr.setsize(chunk.sizeInBytes())
+        arr = np.frombuffer(ptr, dtype=np.uint8).copy().reshape(l_y2 - l_y1, l_x2 - l_x1, 4)
         layer_arr = arr.astype(np.float32) / 255.0
         if layer.mask is not None and layer.mask_enabled:
             mw, mh = layer.mask.width(), layer.mask.height()
             mptr = layer.mask.constBits()
             mptr.setsize(layer.mask.sizeInBytes())
             m_arr = np.frombuffer(mptr, dtype=np.uint8).copy().reshape(mh, mw, 4)
-            if mw != w or mh != h:
-                mask_img = layer.mask.scaled(w, h, Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
+            if mw != iw or mh != ih:
+                mask_img = layer.mask.scaled(iw, ih, Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
                 mptr2 = mask_img.constBits()
                 mptr2.setsize(mask_img.sizeInBytes())
-                m_arr = np.frombuffer(mptr2, dtype=np.uint8).copy().reshape(h, w, 4)
-            mask_alpha = m_arr[:, :, 0].astype(np.float32) / 255.0
+                m_arr = np.frombuffer(mptr2, dtype=np.uint8).copy().reshape(ih, iw, 4)
+            mask_alpha = m_arr[l_y1:l_y2, l_x1:l_x2, 0].astype(np.float32) / 255.0
             layer_arr[:, :, 3] = layer_arr[:, :, 3] * mask_alpha
         blend_func = BLEND_FUNCS.get(layer.blend_mode, blend_normal)
-        blend_rgb = blend_func(result[:, :, :3], layer_arr[:, :, :3])
+        result_slice = result[r_y1:r_y2, r_x1:r_x2]
+        blend_rgb = blend_func(result_slice[:, :, :3], layer_arr[:, :, :3])
         layer_arr[:, :, 3] = layer_arr[:, :, 3] * layer.fill
         alpha = layer_arr[:, :, 3] * layer.opacity
         a = alpha[:, :, np.newaxis]
-        result[:, :, :3] = blend_rgb * a + result[:, :, :3] * (1.0 - a)
-        result[:, :, 3] = alpha + result[:, :, 3] * (1.0 - alpha)
+        result_slice[:, :, :3] = blend_rgb * a + result_slice[:, :, :3] * (1.0 - a)
+        result_slice[:, :, 3] = alpha + result_slice[:, :, 3] * (1.0 - alpha)
 
-    def _composite_group_into(self, group, result, w, h):
+    def _composite_group_into(self, group, result, w, h, base_x=0, base_y=0):
         if not group.visible:
             return
         group_result = np.zeros((h, w, 4), dtype=np.float32)
         for child in group.children:
             if isinstance(child, GroupLayer):
-                self._composite_group_into(child, group_result, w, h)
+                self._composite_group_into(child, group_result, w, h, base_x, base_y)
             elif child.visible:
-                self._composite_layer_into(child, group_result, w, h)
+                self._composite_layer_into(child, group_result, w, h, base_x, base_y)
         blend_func = BLEND_FUNCS.get(group.blend_mode, blend_normal)
         blend_rgb = blend_func(result[:, :, :3], group_result[:, :, :3])
         alpha = group_result[:, :, 3] * group.opacity

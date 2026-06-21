@@ -374,17 +374,11 @@ class CanvasView(QGraphicsView):
         layer = self.layer_stack.active
         if not layer or layer.locked:
             return False
-        w, h = layer.image.width(), layer.image.height()
         i_dx, i_dy = int(round(dx)), int(round(dy))
         if i_dx == 0 and i_dy == 0:
             return False
-        new_img = QImage(w, h, QImage.Format_ARGB32_Premultiplied)
-        new_img.fill(Qt.transparent)
-        p = QPainter(new_img)
-        p.setRenderHint(QPainter.SmoothPixmapTransform)
-        p.drawImage(i_dx, i_dy, layer.image)
-        p.end()
-        layer.image = new_img
+        layer.x_offset += i_dx
+        layer.y_offset += i_dy
         self.layer_stack.invalidate_cache()
         self._refresh()
         return True

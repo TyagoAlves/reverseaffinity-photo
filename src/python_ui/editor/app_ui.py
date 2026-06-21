@@ -1012,6 +1012,11 @@ class MainWindow(QMainWindow):
         view_m.addSeparator()
         self.mode_action = view_m.addAction(_("Switch to &Video Mode"), self._toggle_mode, QKeySequence("F5"))
 
+        view_m.addSeparator()
+        self.hide_panels_action = view_m.addAction(_("&Hide Panels"), self._toggle_panels, QKeySequence(Qt.Key_Tab))
+        self.hide_panels_action.setCheckable(True)
+        self._panels_visible = True
+
         help_m = mb.addMenu(_("&Help"))
         help_m.addAction(_("&About reverseaffinity"), self._show_about)
 
@@ -1209,7 +1214,8 @@ class MainWindow(QMainWindow):
             self.tool_palette.parent().hide()
             self.tool_options.hide()
             self.right_dock.hide()
-            self.console_dock.hide()
+            if hasattr(self, 'console_dock'):
+                self.console_dock.hide()
             self.setWindowTitle(_("reverseaffinity Video - [Untitled]"))
         else:
             self.current_mode = "photo"
@@ -1218,8 +1224,19 @@ class MainWindow(QMainWindow):
             self.tool_palette.parent().show()
             self.tool_options.show()
             self.right_dock.show()
-            self.console_dock.show()
+            if hasattr(self, 'console_dock'):
+                self.console_dock.show()
             self.setWindowTitle(_("reverseaffinity Photo - [Untitled]"))
+
+    def _toggle_panels(self):
+        self._panels_visible = not self._panels_visible
+        visible = self._panels_visible
+        self.tool_palette.parent().setVisible(visible)
+        self.tool_options.setVisible(visible)
+        self.right_dock.setVisible(visible)
+        if hasattr(self, 'console_dock'):
+            self.console_dock.setVisible(visible)
+        self.hide_panels_action.setChecked(not visible)
 
     def _paste_image(self):
         if self.canvas.paste_from_clipboard():
