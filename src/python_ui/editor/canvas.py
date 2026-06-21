@@ -17,6 +17,7 @@ from .guides import GuideManager
 from .snapping import SnappingEngine
 from .settings import SettingsManager
 from .file_formats import FORMAT_REGISTRY, get_format_for_filename
+from .path import Path
 
 
 class CanvasView(QGraphicsView):
@@ -76,6 +77,10 @@ class CanvasView(QGraphicsView):
 
         self.pen_path = []
         self.pen_handle_offsets = []
+        self.vector_paths = []
+        self.selected_path_idx = -1
+        self.edit_anchor_idx = -1
+        self.edit_handle = None
         self.ruler_dragging_guide = False
         self.dragging_guide_index = -1
         self.ruler_drag_orientation = None
@@ -101,14 +106,6 @@ class CanvasView(QGraphicsView):
 
         self.tool_changed.emit(self.tool.name)
         self._refresh()
-
-    def apply_opengl_setting(self, use_opengl):
-        if use_opengl:
-            try:
-                from PyQt5.QtWidgets import QOpenGLWidget
-                self.setViewport(QOpenGLWidget())
-            except Exception:
-                pass
 
     def _refresh(self):
         composite = self.layer_stack.composite()
@@ -374,12 +371,17 @@ class CanvasView(QGraphicsView):
         layer = self.layer_stack.active
         if not layer or layer.locked:
             return False
-        i_dx, i_dy = int(round(dx)), int(round(dy))
+        w, h = layer.image.width(), layer.image.height()
+        i_dx, i_dy = int(dx), int(dy)
         if i_dx == 0 and i_dy == 0:
             return False
-        layer.x_offset += i_dx
-        layer.y_offset += i_dy
-        self.layer_stack.invalidate_cache()
+        new_img = QImage(w, h, QImage.Format_ARGB32)
+        new_img.fill(Qt.transparent)
+        p = QPainter(new_img)
+        p.setRenderHint(QPainter.SmoothPixmapTransform)
+        p.drawImage(i_dx, i_dy, layer.image)
+        p.end()
+        layer.image = new_img
         self._refresh()
         return True
 
@@ -509,7 +511,7 @@ class CanvasView(QGraphicsView):
         self._apply_pixel_op(pos, self._sponge_func, amount)
 
     def dodge_line(self, p1, p2, exposure=0.5):
-        steps = max(int(math.hypot(p2.x() - p1.x(), p2.y() - p1.y()) / 2), 1)
+        steps = max(int(p1.distance(p2) / 2), 1)
         for t in range(steps + 1):
             frac = t / steps
             pt = QPointF(p1.x() + (p2.x() - p1.x()) * frac,
@@ -517,7 +519,7 @@ class CanvasView(QGraphicsView):
             self.dodge_point(pt, exposure)
 
     def burn_line(self, p1, p2, exposure=0.5):
-        steps = max(int(math.hypot(p2.x() - p1.x(), p2.y() - p1.y()) / 2), 1)
+        steps = max(int(p1.distance(p2) / 2), 1)
         for t in range(steps + 1):
             frac = t / steps
             pt = QPointF(p1.x() + (p2.x() - p1.x()) * frac,
@@ -525,7 +527,7 @@ class CanvasView(QGraphicsView):
             self.burn_point(pt, exposure)
 
     def saturate_line(self, p1, p2, amount=0.5):
-        steps = max(int(math.hypot(p2.x() - p1.x(), p2.y() - p1.y()) / 2), 1)
+        steps = max(int(p1.distance(p2) / 2), 1)
         for t in range(steps + 1):
             frac = t / steps
             pt = QPointF(p1.x() + (p2.x() - p1.x()) * frac,
@@ -776,33 +778,71 @@ class CanvasView(QGraphicsView):
         painter.restore()
 
     def draw_pen_path(self, painter):
-        if not self.pen_path or len(self.pen_path) < 2:
-            return
         painter.save()
-        path = QPainterPath()
-        path.moveTo(self.pen_path[0])
-        for i in range(1, len(self.pen_path)):
-            prev = self.pen_path[i - 1]
-            curr = self.pen_path[i]
-            h_out = self.pen_handle_offsets[i - 1] if i - 1 < len(self.pen_handle_offsets) else None
-            h_in = self.pen_handle_offsets[i] if i < len(self.pen_handle_offsets) else None
-            if h_out is not None and h_in is not None:
-                path.cubicTo(prev + h_out, curr - h_in, curr)
-            elif h_out is not None:
-                path.cubicTo(prev + h_out, curr, curr)
-            elif h_in is not None:
-                path.cubicTo(prev, curr - h_in, curr)
-            else:
-                path.lineTo(curr)
-        painter.setPen(QPen(QColor(self.tool_color), 1.5 / self.zoom_level))
-        painter.setBrush(Qt.NoBrush)
-        painter.drawPath(path)
-        for pt in self.pen_path:
-            painter.setBrush(QBrush(self.tool_color))
-            painter.setPen(QPen(Qt.white, 1))
-            r = 3.0 / self.zoom_level
-            painter.drawEllipse(pt, r, r)
+        z = self.zoom_level
+        if self.pen_path and len(self.pen_path) >= 2:
+            path = QPainterPath()
+            path.moveTo(self.pen_path[0])
+            for i in range(1, len(self.pen_path)):
+                prev = self.pen_path[i - 1]
+                curr = self.pen_path[i]
+                h_out = self.pen_handle_offsets[i - 1] if i - 1 < len(self.pen_handle_offsets) else None
+                h_in = self.pen_handle_offsets[i] if i < len(self.pen_handle_offsets) else None
+                if h_out is not None and h_in is not None:
+                    path.cubicTo(prev + h_out, curr - h_in, curr)
+                elif h_out is not None:
+                    path.cubicTo(prev + h_out, curr, curr)
+                elif h_in is not None:
+                    path.cubicTo(prev, curr - h_in, curr)
+                else:
+                    path.lineTo(curr)
+            painter.setPen(QPen(QColor(self.tool_color), 1.5 / z))
+            painter.setBrush(Qt.NoBrush)
+            painter.drawPath(path)
+            for pt in self.pen_path:
+                painter.setBrush(QBrush(self.tool_color))
+                painter.setPen(QPen(Qt.white, 1))
+                r = 3.0 / z
+                painter.drawEllipse(pt, r, r)
+        self.draw_path_edit_overlay(painter)
         painter.restore()
+
+    def draw_path_edit_overlay(self, painter):
+        if self.selected_path_idx < 0 or self.selected_path_idx >= len(self.vector_paths):
+            return
+        pobj = self.vector_paths[self.selected_path_idx]
+        if not pobj.anchors:
+            return
+        z = self.zoom_level
+        painter.save()
+        track_anchor_r = 4.0 / z
+        track_handle_r = 3.0 / z
+        for i, anchor in enumerate(pobj.anchors):
+            pos = anchor.position
+            is_selected = (i == self.edit_anchor_idx)
+            painter.setBrush(QBrush(QColor(100, 150, 255, 180)))
+            painter.setPen(QPen(Qt.white if is_selected else Qt.black, 1.0 / z))
+            painter.drawEllipse(pos, track_anchor_r, track_anchor_r)
+            for htype in ('handle_in', 'handle_out'):
+                hpos = anchor.handle_in if htype == 'handle_in' else anchor.handle_out
+                if (hpos - pos).manhattanLength() > 0.5:
+                    painter.setPen(QPen(QColor(100, 150, 255), 1.0 / z, Qt.DashLine))
+                    painter.drawLine(pos, hpos)
+                    is_hover = (self.edit_handle == htype and i == self.edit_anchor_idx)
+                    painter.setBrush(QBrush(QColor(255, 200, 100)))
+                    painter.setPen(QPen(Qt.white if is_hover else Qt.black, 1.0 / z))
+                    painter.drawEllipse(hpos, track_handle_r, track_handle_r)
+        painter.restore()
+
+    def _rasterize_vector_paths(self):
+        layer = self.layer_stack.active
+        if not layer or layer.locked:
+            return
+        layer.image.fill(Qt.transparent)
+        for pobj in self.vector_paths:
+            if pobj.visible:
+                pobj.rasterize_to(layer.image, fill_color=self.tool_color, stroke_color=self.tool_color)
+        self._refresh()
 
     def draw_crop_overlay(self, painter):
         if not self.crop_active or self.crop_start is None or self.crop_end is None:
@@ -813,10 +853,10 @@ class CanvasView(QGraphicsView):
         painter.setBrush(overlay_color)
         painter.setPen(Qt.NoPen)
         sr = self.scene.sceneRect()
-        painter.drawRect(QRectF(0, 0, sr.width(), rect.top()))
-        painter.drawRect(QRectF(0, rect.bottom(), sr.width(), sr.height() - rect.bottom()))
-        painter.drawRect(QRectF(0, rect.top(), rect.left(), rect.height()))
-        painter.drawRect(QRectF(rect.right(), rect.top(), sr.width() - rect.right(), rect.height()))
+        painter.drawRect(0, 0, sr.width(), rect.top())
+        painter.drawRect(0, rect.bottom(), sr.width(), sr.height() - rect.bottom())
+        painter.drawRect(0, rect.top(), rect.left(), rect.height())
+        painter.drawRect(rect.right(), rect.top(), sr.width() - rect.right(), rect.height())
         painter.setBrush(Qt.NoBrush)
         painter.setPen(QPen(QColor(100, 150, 255), 1.5 / self.zoom_level))
         painter.drawRect(rect)
@@ -979,7 +1019,6 @@ class CanvasView(QGraphicsView):
             from .tools import PenTool
             if isinstance(self.tool, PenTool):
                 self.tool.finalize(self)
-            super().mousePressEvent(event)
             return
         if event.button() == Qt.LeftButton:
             view_pos = event.pos()
@@ -1008,7 +1047,6 @@ class CanvasView(QGraphicsView):
             if snap_info:
                 self._show_snap_indicator(snap_info[0], snap_info[1])
                 self.status_changed.emit(f"Snap to {snap_info[1]}")
-            super().mousePressEvent(event)
         elif event.button() == Qt.MiddleButton:
             self.setDragMode(QGraphicsView.ScrollHandDrag)
             super().mousePressEvent(event)
@@ -1062,10 +1100,9 @@ class CanvasView(QGraphicsView):
                 if snap_info:
                     self._show_snap_indicator(snap_info[0], snap_info[1])
                     self.status_changed.emit(f"Snap to {snap_info[1]}")
-            super().mouseReleaseEvent(event)
         elif event.button() == Qt.MiddleButton:
             self.setDragMode(QGraphicsView.NoDrag)
-            super().mouseReleaseEvent(event)
+            event.ignore()
 
     def keyPressEvent(self, event):
         key = event.key()
@@ -1101,6 +1138,12 @@ class CanvasView(QGraphicsView):
                 self.tool.finalize(self)
             elif isinstance(self.tool, CropTool):
                 self.tool.apply(self)
+
+        # Backspace to delete selected anchor in pen tool
+        elif key == Qt.Key_Backspace and not mods:
+            from .tools import PenTool
+            if isinstance(self.tool, PenTool):
+                self.tool.key_press(self, key)
 
         # Escape to cancel pen or crop
         elif key == Qt.Key_Escape and not mods:

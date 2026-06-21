@@ -1,5 +1,5 @@
 import os
-from PyQt5.QtCore import Qt, QSize, QSettings, QRectF, QTimer
+from PyQt5.QtCore import Qt, QSize, QSettings, QRectF
 from PyQt5.QtGui import QColor, QKeySequence, QFont, QIcon, QFontDatabase, QPixmap, QPainter, QBrush, QPen, QPainterPath
 from PyQt5.QtWidgets import (
     QMainWindow, QAction, QFileDialog, QColorDialog,
@@ -18,7 +18,6 @@ from .file_dialog import get_open_file_name, get_save_file_name
 from .settings import SettingsManager
 from .preferences_dialog import PreferencesDialog
 from .resources import apply_dark_theme
-from .tutorial import show_welcome_if_needed
 from .tool_icons import get_tool_icon
 from .i18n import _, get_translator
 from .video_mode import VideoMode
@@ -31,9 +30,9 @@ class ToolPalette(QWidget):
     def __init__(self, canvas_getter, parent=None):
         super().__init__(parent)
         self.get_canvas = canvas_getter
-        self.setFixedWidth(50)
+        self.setFixedWidth(42)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setContentsMargins(2, 2, 2, 2)
         layout.setSpacing(1)
 
         self.button_group = QButtonGroup()
@@ -49,10 +48,10 @@ class ToolPalette(QWidget):
                 icon = get_tool_icon(tool_cls.name)
                 if not icon.isNull():
                     btn.setIcon(icon)
-                    btn.setIconSize(QSize(26, 26))
+                    btn.setIconSize(QSize(20, 20))
                 else:
                     btn.setText(tool_cls.shortcut)
-                btn.setFixedSize(40, 30)
+                btn.setFixedSize(36, 26)
                 btn.setStyleSheet("""
                     QToolButton {
                         border: 1px solid #2a2a2a; border-radius: 3px;
@@ -586,7 +585,9 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         screen = QApplication.primaryScreen().availableGeometry()
-        self.setMinimumSize(800, 500)
+        max_w = min(int(screen.width() * 0.75), screen.width())
+        max_h = min(int(screen.height() * 0.8), screen.height())
+        self.resize(min(max_w, 1400), min(max_h, 900))
         self.setMaximumSize(screen.width(), screen.height())
 
         self.canvas = CanvasView(self)
@@ -600,9 +601,7 @@ class MainWindow(QMainWindow):
 
         self.settings = SettingsManager()
         self.settings.load()
-        self.canvas.apply_opengl_setting(self.settings.get('use_opengl', False))
-        self.settings.setting_changed.connect(self._on_setting_changed)
-        self.recent_files = []
+        get_translator().language_changed.connect(lambda l: self.retranslate_ui())
         lang = self.settings.get('language', 'pt_BR')
         if lang and lang != 'system':
             get_translator().set_language(lang)
@@ -770,9 +769,6 @@ class MainWindow(QMainWindow):
         self._plugin_manager = self._init_plugins()
         self._update_dim_label()
         self.retranslate_ui()
-        get_translator().language_changed.connect(lambda l: self.retranslate_ui())
-        self.showMaximized()
-        QTimer.singleShot(300, lambda: show_welcome_if_needed(self))
 
     def _make_toolbar_wrapper(self, widget):
         tb = QToolBar(_("Tools"))
@@ -812,10 +808,6 @@ class MainWindow(QMainWindow):
             self.canvas.set_foreground_color(color)
             self._sync_color_btn(color)
             self.color_panel.set_color(color)
-
-    def _on_setting_changed(self, key, value):
-        if key == 'use_opengl':
-            self.canvas.apply_opengl_setting(value)
 
     def _show_about(self):
         icon_path = os.path.join(os.path.dirname(__file__), "..", "assets", "icon.svg")
@@ -867,22 +859,19 @@ class MainWindow(QMainWindow):
             pass
 
     def create_menus(self):
-        self.menuBar().setNativeMenuBar(False)
         mb = self.menuBar()
 
         file_m = mb.addMenu(_("&File"))
         file_m.addAction(_("&New..."), self._new_file, QKeySequence.New)
         file_m.addAction(_("&Open..."), self._open_file, QKeySequence.Open)
-        file_m.addSeparator()
+        file_m.addAction(_("&Place Image..."), self._place_image, QKeySequence("Ctrl+Shift+P"))
         self.open_recent_menu = file_m.addMenu(_("Open &Recent"))
         self._rebuild_recent_menu()
         file_m.addSeparator()
         file_m.addAction(_("&Save"), self._save_file, QKeySequence.Save)
         file_m.addAction(_("Save &As..."), self._save_as_file, QKeySequence("Ctrl+Shift+S"))
         file_m.addSeparator()
-        file_m.addAction(_("&Place Image..."), self._place_image, QKeySequence("Ctrl+Shift+P"))
-        file_m.addSeparator()
-        exp_m = file_m.addMenu(_("E&xport"))
+        exp_m = file_m.addMenu(_("&Export"))
         exp_m.addAction(_("Export &With Options..."), self._export_dialog)
         exp_m.addSeparator()
         exp_m.addAction(_("Export as &PNG..."), self._export_png)
@@ -892,14 +881,13 @@ class MainWindow(QMainWindow):
         exp_m.addSeparator()
         exp_m.addAction(_("Batch Export &Layers..."), self._batch_export_layers)
         file_m.addSeparator()
-        file_m.addAction(_("&Quit"), self.close, QKeySequence("Ctrl+Q"))
+        file_m.addAction(_("&Close"), self.close, QKeySequence("Ctrl+Q"))
 
         edit_m = mb.addMenu(_("&Edit"))
         edit_m.addAction(_("&Undo"), self._undo, QKeySequence.Undo)
         edit_m.addAction(_("&Redo"), self._redo, QKeySequence("Ctrl+Shift+Z"))
         edit_m.addSeparator()
         edit_m.addAction(_("&Paste"), self._paste_image, QKeySequence.Paste)
-        edit_m.addSeparator()
         edit_m.addAction(_("&Fill..."), self._fill)
         edit_m.addAction(_("&Clear"), self._clear)
         edit_m.addSeparator()
@@ -931,20 +919,9 @@ class MainWindow(QMainWindow):
         view_m = mb.addMenu(_("&View"))
         view_m.addAction(_("Zoom &In"), self.canvas.zoom_in, QKeySequence("Ctrl++"))
         view_m.addAction(_("Zoom &Out"), self.canvas.zoom_out, QKeySequence("Ctrl+-"))
-        view_m.addSeparator()
         view_m.addAction(_("Zoom to &100%"), self.canvas.zoom_100, QKeySequence("Ctrl+1"))
         view_m.addAction(_("Zoom to &Selection"), self.canvas.zoom_to_selection, QKeySequence("Ctrl+2"))
         view_m.addAction(_("&Fit to Screen"), self.canvas.zoom_fit, QKeySequence("Ctrl+0"))
-        view_m.addSeparator()
-
-        ga = view_m.addAction(_("Show &Grid"))
-        ga.setCheckable(True)
-        ga.setChecked(False)
-        ga.triggered.connect(lambda v: setattr(self.canvas, 'show_grid', v) or self.canvas.viewport().update())
-        ra = view_m.addAction(_("Show &Rulers"))
-        ra.setCheckable(True)
-        ra.setChecked(True)
-        ra.triggered.connect(lambda v: setattr(self.canvas, 'show_rulers', v) or self.canvas.viewport().update())
         view_m.addSeparator()
 
         snap_m = view_m.addMenu(_("&Snap"))
@@ -1007,15 +984,19 @@ class MainWindow(QMainWindow):
         guides_m.addAction(_("&New Guide..."), self._show_guide_dialog, QKeySequence("Ctrl+Shift+G"))
 
         view_m.addSeparator()
+        ga = view_m.addAction(_("Show &Grid"))
+        ga.setCheckable(True)
+        ga.setChecked(False)
+        ga.triggered.connect(lambda v: setattr(self.canvas, 'show_grid', v) or self.canvas.viewport().update())
+        ra = view_m.addAction(_("Show &Rulers"))
+        ra.setCheckable(True)
+        ra.setChecked(True)
+        ra.triggered.connect(lambda v: setattr(self.canvas, 'show_rulers', v) or self.canvas.viewport().update())
+        view_m.addSeparator()
         view_m.addAction(_("&Reset View"), self.canvas.zoom_fit)
 
         view_m.addSeparator()
         self.mode_action = view_m.addAction(_("Switch to &Video Mode"), self._toggle_mode, QKeySequence("F5"))
-
-        view_m.addSeparator()
-        self.hide_panels_action = view_m.addAction(_("&Hide Panels"), self._toggle_panels, QKeySequence(Qt.Key_Tab))
-        self.hide_panels_action.setCheckable(True)
-        self._panels_visible = True
 
         help_m = mb.addMenu(_("&Help"))
         help_m.addAction(_("&About reverseaffinity"), self._show_about)
@@ -1198,8 +1179,6 @@ class MainWindow(QMainWindow):
         self.create_menus()
 
     def _rebuild_status_bar(self):
-        if not hasattr(self, 'coord_label'):
-            return
         self.coord_label.setText(_("X: ") + "0" + _("  Y: ") + "0")
         self.info_label.setText(_("R:") + "0" + _(" G:") + "0" + _(" B:") + "0")
         self.tool_label.setText(self.canvas.tool.name)
@@ -1214,8 +1193,7 @@ class MainWindow(QMainWindow):
             self.tool_palette.parent().hide()
             self.tool_options.hide()
             self.right_dock.hide()
-            if hasattr(self, 'console_dock'):
-                self.console_dock.hide()
+            self.console_dock.hide()
             self.setWindowTitle(_("reverseaffinity Video - [Untitled]"))
         else:
             self.current_mode = "photo"
@@ -1224,19 +1202,8 @@ class MainWindow(QMainWindow):
             self.tool_palette.parent().show()
             self.tool_options.show()
             self.right_dock.show()
-            if hasattr(self, 'console_dock'):
-                self.console_dock.show()
+            self.console_dock.show()
             self.setWindowTitle(_("reverseaffinity Photo - [Untitled]"))
-
-    def _toggle_panels(self):
-        self._panels_visible = not self._panels_visible
-        visible = self._panels_visible
-        self.tool_palette.parent().setVisible(visible)
-        self.tool_options.setVisible(visible)
-        self.right_dock.setVisible(visible)
-        if hasattr(self, 'console_dock'):
-            self.console_dock.setVisible(visible)
-        self.hide_panels_action.setChecked(not visible)
 
     def _paste_image(self):
         if self.canvas.paste_from_clipboard():
@@ -1526,6 +1493,8 @@ class MainWindow(QMainWindow):
     def _init_plugins(self):
         try:
             from plugins import PluginManager
+            from .file_formats import FORMAT_REGISTRY
+            from .tools import TOOLS_BY_NAME, SHORTCUT_MAP, TOOL_LIST
             mgr = PluginManager(plugin_dir=os.path.join(os.path.dirname(__file__), "..", "plugins"))
             mgr.discover()
             ctx = {
@@ -1533,12 +1502,27 @@ class MainWindow(QMainWindow):
                 "main_window": self,
                 "menu_bar": self.menuBar(),
                 "tab_widget": self.right_tabs,
+                "tool_registry": TOOLS_BY_NAME,
+                "shortcut_registry": SHORTCUT_MAP,
+                "tool_list": TOOL_LIST,
+                "format_registry": FORMAT_REGISTRY,
             }
             for plugin in mgr.plugins:
                 try:
                     plugin.on_load(ctx)
                     for filt_name, filt_func in plugin.register_filters():
                         self.canvas._plugin_filters[filt_name] = filt_func
+                    for tool_cls in plugin.register_tools():
+                        name = tool_cls.name.lower()
+                        TOOLS_BY_NAME[name] = tool_cls
+                        shortcut = getattr(tool_cls, 'shortcut', '').lower()
+                        if shortcut:
+                            SHORTCUT_MAP[shortcut] = tool_cls
+                        known_groups = [g for g in TOOL_LIST if g[0] == "Draw"]
+                        if known_groups:
+                            known_groups[0][1].append(tool_cls)
+                    for ext, info in plugin.register_file_formats():
+                        FORMAT_REGISTRY[ext] = info
                     plugin.register_menu_items(self.menuBar())
                     plugin.register_panels(self.right_tabs)
                 except Exception:
@@ -1550,6 +1534,12 @@ class MainWindow(QMainWindow):
             return mgr
         except Exception:
             pass
+
+    def closeEvent(self, event):
+        if hasattr(self, '_plugin_manager') and self._plugin_manager:
+            ctx = {"canvas": self.canvas, "main_window": self}
+            self._plugin_manager.unload_all(ctx)
+        event.accept()
 
 
 def main():

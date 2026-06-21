@@ -9,12 +9,11 @@ Hotkeys:
 """
 
 from PyQt5.QtCore import Qt, QPointF, QRectF
-from PyQt5.QtWidgets import QGraphicsView
 from .brushengine import BrushEngine, CircleTip, SquareTip, TextureTip
-from PyQt5.QtGui import QPainter, QPen, QBrush, QColor, QFont, QFontDatabase, QFontMetrics, QPainterPath, QCursor
+from PyQt5.QtGui import QPainter, QPen, QBrush, QColor, QFont, QFontDatabase, QPainterPath, QCursor
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QTextEdit, QComboBox,
-    QSpinBox, QPushButton, QLabel, QCheckBox, QMessageBox, QColorDialog,
+    QSpinBox, QPushButton, QLabel, QCheckBox, QMessageBox,
 )
 
 SHORTCUT_MAP = {}
@@ -272,11 +271,11 @@ class HandTool(Tool):
     cursor_shape = Qt.OpenHandCursor
 
     def press(self, canvas, pos, mods):
-        canvas.setDragMode(QGraphicsView.ScrollHandDrag)
+        canvas.setDragMode(1)
         super().press(canvas, pos, mods)
 
     def release(self, canvas, pos, mods):
-        canvas.setDragMode(QGraphicsView.NoDrag)
+        canvas.setDragMode(0)
         super().release(canvas, pos, mods)
 
 
@@ -297,8 +296,45 @@ class PenTool(Tool):
     shortcut = "P"
     cursor_shape = Qt.CrossCursor
     dragging = False
+    edit_mode = False
 
     def press(self, canvas, pos, mods):
+        if canvas.selected_path_idx >= 0 and canvas.selected_path_idx < len(canvas.vector_paths):
+            pobj = canvas.vector_paths[canvas.selected_path_idx]
+            hit = pobj.hit_test(pos, 8.0 / (canvas.zoom_level or 1.0))
+            if hit:
+                htype, hidx = hit
+                if htype == 'anchor':
+                    canvas.edit_anchor_idx = hidx
+                    canvas.edit_handle = None
+                else:
+                    canvas.edit_anchor_idx = hidx
+                    canvas.edit_handle = htype
+                self.dragging = True
+                self.press_pos = pos
+                self.edit_mode = True
+                canvas.update()
+                return
+            seg_idx = pobj.segment_hit_test(pos, 8.0 / (canvas.zoom_level or 1.0))
+            if seg_idx:
+                pobj.add_anchor_at_segment(0.5, seg_idx - 1)
+                canvas._rasterize_vector_paths()
+                canvas.update()
+                return
+            canvas.selected_path_idx = -1
+            canvas.edit_anchor_idx = -1
+            canvas.edit_handle = None
+        for i, pobj in enumerate(canvas.vector_paths):
+            hit = pobj.hit_test(pos, 8.0 / (canvas.zoom_level or 1.0))
+            if hit:
+                canvas.selected_path_idx = i
+                canvas.edit_anchor_idx = hit[1]
+                canvas.edit_handle = hit[0] if hit[0] != 'anchor' else None
+                self.dragging = True
+                self.press_pos = pos
+                self.edit_mode = True
+                canvas.update()
+                return
         if not hasattr(canvas, 'pen_path'):
             canvas.pen_path = []
             canvas.pen_handle_offsets = []
@@ -309,6 +345,15 @@ class PenTool(Tool):
         canvas.update()
 
     def move(self, canvas, last, pos, mods):
+        if self.edit_mode and canvas.edit_anchor_idx >= 0:
+            pobj = canvas.vector_paths[canvas.selected_path_idx]
+            if canvas.edit_handle:
+                pobj.move_handle(canvas.edit_anchor_idx, canvas.edit_handle, pos)
+            else:
+                pobj.move_anchor(canvas.edit_anchor_idx, pos)
+            canvas._rasterize_vector_paths()
+            canvas.update()
+            return
         if self.dragging and hasattr(canvas, 'pen_path') and canvas.pen_path:
             offset = pos - canvas.pen_path[-1]
             if offset.manhattanLength() > 3:
@@ -316,6 +361,12 @@ class PenTool(Tool):
             canvas.update()
 
     def release(self, canvas, pos, mods):
+        if self.edit_mode:
+            canvas._rasterize_vector_paths()
+            canvas.update()
+            self.edit_mode = False
+            self.dragging = False
+            return
         self.dragging = False
 
     def finalize(self, canvas):
@@ -324,37 +375,51 @@ class PenTool(Tool):
             canvas.pen_handle_offsets = []
             canvas.update()
             return
-        layer = canvas.layer_stack.active
-        if layer and not layer.locked:
-            p = QPainter(layer.image)
-            p.setRenderHint(QPainter.Antialiasing)
-            path = QPainterPath()
-            path.moveTo(canvas.pen_path[0])
-            for i in range(1, len(canvas.pen_path)):
-                prev = canvas.pen_path[i - 1]
-                curr = canvas.pen_path[i]
-                h_out = canvas.pen_handle_offsets[i - 1]
-                h_in = canvas.pen_handle_offsets[i]
-                if h_out is not None and h_in is not None:
-                    path.cubicTo(prev + h_out, curr - h_in, curr)
-                elif h_out is not None:
-                    path.cubicTo(prev + h_out, curr, curr)
-                elif h_in is not None:
-                    path.cubicTo(prev, curr - h_in, curr)
-                else:
-                    path.lineTo(curr)
-            p.fillPath(path, QBrush(canvas.tool_color))
-            p.setPen(QPen(canvas.tool_color, 1.5))
-            p.drawPath(path)
-            p.end()
-            canvas._refresh()
+        pobj = Path()
+        pobj.fill = True
+        pobj.stroke = True
+        pobj.stroke_width = 1.5
+        pobj.stroke_color = QColor(canvas.tool_color)
+        for i, pt in enumerate(canvas.pen_path):
+            handle_in = None
+            handle_out = None
+            if i > 0 and canvas.pen_handle_offsets[i - 1] is not None:
+                handle_out = canvas.pen_path[i - 1] + canvas.pen_handle_offsets[i - 1]
+            if canvas.pen_handle_offsets[i] is not None:
+                hi = pt - canvas.pen_handle_offsets[i]
+                if (hi - pt).manhattanLength() > 0.5:
+                    handle_in = hi
+            pobj.add_anchor(pt, handle_in, handle_out, "smooth" if (handle_in or handle_out) else "corner")
+        for i in range(len(pobj.anchors)):
+            a = pobj.anchors[i]
+            if a.handle_in == a.position:
+                a.handle_in = QPointF(a.position)
+            if a.handle_out == a.position:
+                a.handle_out = QPointF(a.position)
+        canvas.vector_paths.append(pobj)
+        canvas._rasterize_vector_paths()
         canvas.pen_path = []
         canvas.pen_handle_offsets = []
         canvas.update()
 
+    def key_press(self, canvas, key):
+        if key == Qt.Key_Backspace:
+            if canvas.edit_anchor_idx >= 0 and canvas.selected_path_idx >= 0:
+                pobj = canvas.vector_paths[canvas.selected_path_idx]
+                pobj.delete_anchor(canvas.edit_anchor_idx)
+                canvas.edit_anchor_idx = -1
+                canvas.edit_handle = None
+                if len(pobj.anchors) < 2:
+                    canvas.vector_paths.pop(canvas.selected_path_idx)
+                    canvas.selected_path_idx = -1
+                canvas._rasterize_vector_paths()
+                canvas.update()
+
     def cancel(self, canvas):
         canvas.pen_path = []
         canvas.pen_handle_offsets = []
+        canvas.edit_anchor_idx = -1
+        canvas.edit_handle = None
         canvas.update()
 
 
@@ -364,7 +429,7 @@ class TextTool(Tool):
     cursor_shape = Qt.IBeamCursor
 
     def press(self, canvas, pos, mods):
-        dialog = QDialog(canvas)
+        dialog = QDialog()
         dialog.setWindowTitle("Text Tool")
         layout = QVBoxLayout(dialog)
 
@@ -393,13 +458,6 @@ class TextTool(Tool):
         font_layout.addWidget(underline_cb)
         layout.addLayout(font_layout)
 
-        color_btn = QPushButton("Color")
-        tc = canvas.tool_color
-        if tc.lightness() < 128:
-            tc = QColor(255, 255, 255)
-        color_btn.setStyleSheet(f"background-color: {tc.name()}; min-height: 24px;")
-        font_layout.addWidget(color_btn)
-
         btn_layout = QHBoxLayout()
         ok_btn = QPushButton("OK")
         cancel_btn = QPushButton("Cancel")
@@ -409,41 +467,31 @@ class TextTool(Tool):
 
         confirmed = False
 
-        def on_color():
-            nonlocal tc
-            c = QColorDialog.getColor(tc, dialog, "Text Color")
-            if c.isValid():
-                tc = c
-                color_btn.setStyleSheet(f"background-color: {tc.name()}; min-height: 24px;")
-
         def on_ok():
             nonlocal confirmed
             confirmed = True
             dialog.accept()
 
-        color_btn.clicked.connect(on_color)
         ok_btn.clicked.connect(on_ok)
         cancel_btn.clicked.connect(dialog.reject)
 
         dialog.exec_()
 
         if confirmed:
-            text = text_edit.toPlainText()
-            layer = canvas.layer_stack.add_layer("Text")
+            layer = canvas.layer_stack.active
             if not layer or layer.locked:
                 return
+            text = text_edit.toPlainText()
             font = QFont(font_combo.currentText(), size_spin.value())
             font.setBold(bold_cb.isChecked())
             font.setItalic(italic_cb.isChecked())
             font.setUnderline(underline_cb.isChecked())
-            fm = QFontMetrics(font)
             p = QPainter(layer.image)
             p.setRenderHint(QPainter.Antialiasing)
             p.setFont(font)
-            p.setPen(tc)
-            p.drawText(int(pos.x()), int(pos.y()) + fm.ascent(), text)
+            p.setPen(canvas.tool_color)
+            p.drawText(pos, text)
             p.end()
-            canvas.layer_stack.invalidate_cache()
             canvas._refresh()
 
 
