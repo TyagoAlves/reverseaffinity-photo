@@ -603,7 +603,6 @@ class MainWindow(QMainWindow):
         self.canvas.apply_opengl_setting(self.settings.get('use_opengl', False))
         self.settings.setting_changed.connect(self._on_setting_changed)
         self.recent_files = []
-        get_translator().language_changed.connect(lambda l: self.retranslate_ui())
         lang = self.settings.get('language', 'pt_BR')
         if lang and lang != 'system':
             get_translator().set_language(lang)
@@ -771,6 +770,7 @@ class MainWindow(QMainWindow):
         self._plugin_manager = self._init_plugins()
         self._update_dim_label()
         self.retranslate_ui()
+        get_translator().language_changed.connect(lambda l: self.retranslate_ui())
         self.showMaximized()
         QTimer.singleShot(300, lambda: show_welcome_if_needed(self))
 
