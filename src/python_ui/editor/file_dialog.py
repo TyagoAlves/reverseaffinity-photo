@@ -69,7 +69,7 @@ class FileDialog(QDialog):
 
         layout.addLayout(bottom)
 
-        self._filter_combo.currentIndexChanged.connect(self._refresh)
+        self._filter_combo.currentIndexChanged.connect(lambda i: self._refresh())
         self._file_list.currentItemChanged.connect(self._on_selection)
 
         self._refresh()
