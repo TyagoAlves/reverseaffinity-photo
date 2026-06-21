@@ -602,6 +602,7 @@ class MainWindow(QMainWindow):
         self.settings.load()
         self.canvas.apply_opengl_setting(self.settings.get('use_opengl', False))
         self.settings.setting_changed.connect(self._on_setting_changed)
+        self.recent_files = []
         get_translator().language_changed.connect(lambda l: self.retranslate_ui())
         lang = self.settings.get('language', 'pt_BR')
         if lang and lang != 'system':
