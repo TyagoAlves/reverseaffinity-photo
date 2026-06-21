@@ -140,6 +140,8 @@ class LayerStack:
     def __init__(self, width=800, height=600):
         self.layers = [Layer(width, height, "Background")]
         self.active_index = 0
+        self.canvas_w = width
+        self.canvas_h = height
         self._cache = None
         self._cache_dirty = True
 
@@ -381,25 +383,7 @@ class LayerStack:
             return self._cache
         if not self.layers:
             return QImage()
-        min_x = min_y = 0
-        max_x = max_y = 0
-        first = True
-        for l in self.layers:
-            if isinstance(l, GroupLayer) or not l.visible:
-                continue
-            if first:
-                min_x = l.x_offset
-                min_y = l.y_offset
-                max_x = l.x_offset + l.image.width()
-                max_y = l.y_offset + l.image.height()
-                first = False
-            else:
-                min_x = min(min_x, l.x_offset)
-                min_y = min(min_y, l.y_offset)
-                max_x = max(max_x, l.x_offset + l.image.width())
-                max_y = max(max_y, l.y_offset + l.image.height())
-        w = max(max_x - min_x, 1)
-        h = max(max_y - min_y, 1)
+        w, h = self.canvas_w, self.canvas_h
         result = np.zeros((h, w, 4), dtype=np.float32)
         child_ids = set()
         for l in self.layers:
@@ -410,14 +394,14 @@ class LayerStack:
                 continue
             if isinstance(layer, GroupLayer):
                 if layer.visible:
-                    self._composite_group_into(layer, result, w, h, min_x, min_y)
+                    self._composite_group_into(layer, result, w, h)
             elif layer.visible:
-                self._composite_layer_into(layer, result, w, h, min_x, min_y)
+                self._composite_layer_into(layer, result, w, h)
         self._cache = _float_array_to_qimage(result, w, h)
         self._cache_dirty = False
         return self._cache
 
-    def _composite_layer_into(self, layer, result, w, h, base_x=0, base_y=0):
+    def _composite_layer_into(self, layer, result, w, h):
         if isinstance(layer, AdjustmentLayer):
             if layer.filter_func:
                 qimg = _float_array_to_qimage(result, w, h)
@@ -430,8 +414,8 @@ class LayerStack:
                 result[:, :, :3] = blend_rgb * a + result[:, :, :3] * (1.0 - a)
                 result[:, :, 3] = adjusted[:, :, 3] * a + result[:, :, 3] * (1.0 - a)
             return
-        ox = layer.x_offset - base_x
-        oy = layer.y_offset - base_y
+        ox = layer.x_offset
+        oy = layer.y_offset
         img = layer.image
         iw, ih = img.width(), img.height()
         r_x1 = max(0, ox)
@@ -472,15 +456,15 @@ class LayerStack:
         result_slice[:, :, :3] = blend_rgb * a + result_slice[:, :, :3] * (1.0 - a)
         result_slice[:, :, 3] = alpha + result_slice[:, :, 3] * (1.0 - alpha)
 
-    def _composite_group_into(self, group, result, w, h, base_x=0, base_y=0):
+    def _composite_group_into(self, group, result, w, h):
         if not group.visible:
             return
         group_result = np.zeros((h, w, 4), dtype=np.float32)
         for child in group.children:
             if isinstance(child, GroupLayer):
-                self._composite_group_into(child, group_result, w, h, base_x, base_y)
+                self._composite_group_into(child, group_result, w, h)
             elif child.visible:
-                self._composite_layer_into(child, group_result, w, h, base_x, base_y)
+                self._composite_layer_into(child, group_result, w, h)
         blend_func = BLEND_FUNCS.get(group.blend_mode, blend_normal)
         blend_rgb = blend_func(result[:, :, :3], group_result[:, :, :3])
         alpha = group_result[:, :, 3] * group.opacity
